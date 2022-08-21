@@ -9,7 +9,7 @@ public class Database
     {
         if (filename is null)
         {
-            throw new ArgumentNullException("filename"); //nebo udelat inmemory db.
+            throw new ArgumentNullException(nameof(filename)); //nebo udelat inmemory db.
         }
 
         this.filename = "./" + filename;
