@@ -25,6 +25,7 @@ namespace WhatCanWePlayClient
         readonly HttpClient httpClient = new HttpClient();
         Guid userGuid;
         readonly string ip = "http://localhost:5181";
+        DateTime lastActionTime;
 
         public MainWindow()
         {
@@ -46,6 +47,8 @@ namespace WhatCanWePlayClient
             //display user their guid
             GuidTBox.Text = userGuid.ToString();
 
+
+            lastActionTime = DateTime.Now;
         }
 
         private void CopyBtn_Click(object sender, RoutedEventArgs e)
@@ -56,6 +59,17 @@ namespace WhatCanWePlayClient
         record Info(string Id, string Value);
         private async void UploadBtn_Click(object sender, RoutedEventArgs e)
         {
+            //basic antispam so the api doesn't get spammed
+            if ((DateTime.Now - lastActionTime) < TimeSpan.FromMilliseconds(500))
+            {
+                //MessageTBlock.Text = "You can only compare the games every half a second!";
+                MessageBox.Show("You can only upload your games every half a second!", "Slow down!", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            lastActionTime = DateTime.Now;
+
+
+
             string myGames = string.Join('/', CheckInstalledGames());
             Info info = new Info(userGuid.ToString(), myGames);
             string json = System.Text.Json.JsonSerializer.Serialize(info);
@@ -65,7 +79,7 @@ namespace WhatCanWePlayClient
             {
                 Method = HttpMethod.Post,
                 //RequestUri = new Uri(ip+"/users"),
-                RequestUri = new Uri("http://localhost:5181/users"),
+                RequestUri = new Uri(ip + "/users"),
                 Content = new StringContent(json)
                 {
                     Headers =
@@ -74,15 +88,38 @@ namespace WhatCanWePlayClient
                     }
                 }
             };
-            var response = await httpClient.SendAsync(request);
-            if (response.IsSuccessStatusCode)
+            try
             {
-                MessageBox.Show("Games successfully uploaded!.\nShare your ID code to others now, so you can find what games you have installed in common with them.");
+                var response = await httpClient.SendAsync(request);
+                if (response.IsSuccessStatusCode)
+                {
+                    MessageBox.Show(
+                        "Games successfully uploaded!.\nShare your ID code to others now, so you can find what games you have installed in common with them.",
+                        "Success",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+                else
+                {
+                    //todo: show more user-friendly error response, prolly switch by status code, when unreachable, tell them to notify me 
+                    //nvm, it's prolly pointless, not sure what could go wrong, when the app is done. It can only fail on the server no being active, which is handled by the try catch
+                    //switch (response.StatusCode)
+                    //{
+                    //    case System.Net.HttpStatusCode.BadRequest:
+                    //        break;
+                    //    case System.Net.HttpStatusCode.NotFound:
+                    //        break;
+                    //}
+                    MessageBox.Show(response.StatusCode.ToString());
+                }
             }
-            else
+            catch (Exception ex)
             {
-                //todo: show more user-friendly error response, prolly switch by status code, when unreachable, tell them to notify me 
-                MessageBox.Show(response.StatusCode.ToString());
+                MessageBox.Show(
+                    "No Connection could be made to the server.\nCheck your internet connection and if the issue persists, please contact me.",
+                    "Connection error!",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
             }
         }
 
@@ -148,6 +185,15 @@ namespace WhatCanWePlayClient
 
         private async void CheckBtn_Click(object sender, RoutedEventArgs e)
         {
+            //basic antispam so the api doesn't get spammed
+            if ((DateTime.Now - lastActionTime) < TimeSpan.FromMilliseconds(500))
+            {
+                //MessageTBlock.Text = "You can only compare the games every half a second!";
+                MessageBox.Show("You can only compare the games every half a second!", "Slow down!", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            lastActionTime = DateTime.Now;
+
             //remove old games from the list
             GamesListBox.Items.Clear();
 
@@ -165,11 +211,24 @@ namespace WhatCanWePlayClient
                     return;
                 }
 
-                string response = await httpClient.GetStringAsync(ip + "/users/" + friendGuid.ToString());
+                string response = "";
+                try
+                {
+                    response = await httpClient.GetStringAsync(ip + "/users/" + friendGuid.ToString());
+                }
+                catch (Exception)
+                {
+                    MessageBox.Show(
+                        "No Connection could be made to the server.\nCheck your internet connection and if the issue persists, please contact me.",
+                        "Connection error!",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                    return;
+                }
                 response = response.Replace("\"", "");
 
                 List<string> friendsGames = response.Split('/').ToList();
-                
+
                 friendsGames.ForEach(x => x = rgx.Replace(x, ""));
                 //str = rgx.Replace(str, "");
 
@@ -180,9 +239,9 @@ namespace WhatCanWePlayClient
             possibleGames.ForEach(g => GamesListBox.Items.Add(g));
 
 
-            //note - check the names truncated free of any spaces (and maybe special(nonalphanumeric) chars too), even the spaces in between of the words
-            //and obviously ToLoweCase();   or upper
 
+            //todo: check the names truncated free of any spaces (and maybe special(nonalphanumeric) chars too), even the spaces in between of the words
+            //and obviously ToLoweCase();   or upper
 
         }
     }
