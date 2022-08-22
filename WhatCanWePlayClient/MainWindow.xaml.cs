@@ -13,6 +13,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Text.RegularExpressions;
+using System.Net.Http;
 
 namespace WhatCanWePlayClient
 {
@@ -21,7 +22,9 @@ namespace WhatCanWePlayClient
     /// </summary>
     public partial class MainWindow : Window
     {
+        readonly HttpClient httpClient = new HttpClient();
         Guid userGuid;
+        readonly string ip = "http://localhost:5181";
 
         public MainWindow()
         {
@@ -50,10 +53,37 @@ namespace WhatCanWePlayClient
             Clipboard.SetText(userGuid.ToString());
         }
 
-        private void UploadBtn_Click(object sender, RoutedEventArgs e)
+        record Info(string Id, string Value);
+        private async void UploadBtn_Click(object sender, RoutedEventArgs e)
         {
-            CheckInstalledGames();
-            //and then upload said buttons
+            string myGames = string.Join('/', CheckInstalledGames());
+            Info info = new Info(userGuid.ToString(), myGames);
+            string json = System.Text.Json.JsonSerializer.Serialize(info);
+            //string json = "{\"Id\": \"" + userGuid + "\" ,\"Value\": \"" + myGames + "\"}";
+
+            var request = new HttpRequestMessage
+            {
+                Method = HttpMethod.Post,
+                //RequestUri = new Uri(ip+"/users"),
+                RequestUri = new Uri("http://localhost:5181/users"),
+                Content = new StringContent(json)
+                {
+                    Headers =
+                    {
+                        ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json")
+                    }
+                }
+            };
+            var response = await httpClient.SendAsync(request);
+            if (response.IsSuccessStatusCode)
+            {
+                MessageBox.Show("Games successfully uploaded!.\nShare your ID code to others now, so you can find what games you have installed in common with them.");
+            }
+            else
+            {
+                //todo: show more user-friendly error response, prolly switch by status code, when unreachable, tell them to notify me 
+                MessageBox.Show(response.StatusCode.ToString());
+            }
         }
 
         private List<string> CheckInstalledGames()
@@ -116,13 +146,43 @@ namespace WhatCanWePlayClient
             return installedGames;
         }
 
-        private void CheckBtn_Click(object sender, RoutedEventArgs e)
+        private async void CheckBtn_Click(object sender, RoutedEventArgs e)
         {
-            List<string> myGames = CheckInstalledGames();
+            //remove old games from the list
+            GamesListBox.Items.Clear();
+
+
+            List<string> possibleGames = CheckInstalledGames();
+            Regex rgx = new Regex("[^a-zA-Z0-9 ]");//regex to remove all non alphanumeric chars
+            possibleGames.ForEach(x => x = rgx.Replace(x, ""));
+
+
+            foreach (string friendGuid in FriendGuidsTBox.Text.Split(','))
+            {
+                if (!Guid.TryParse(friendGuid, out _))
+                {
+                    MessageBox.Show("The ID " + friendGuid + " is in an incorerect format!", "", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                string response = await httpClient.GetStringAsync(ip + "/users/" + friendGuid.ToString());
+                response = response.Replace("\"", "");
+
+                List<string> friendsGames = response.Split('/').ToList();
+                
+                friendsGames.ForEach(x => x = rgx.Replace(x, ""));
+                //str = rgx.Replace(str, "");
+
+                possibleGames = possibleGames.Intersect(friendsGames).ToList();
+            }
+
+            //show possible games
+            possibleGames.ForEach(g => GamesListBox.Items.Add(g));
+
 
             //note - check the names truncated free of any spaces (and maybe special(nonalphanumeric) chars too), even the spaces in between of the words
             //and obviously ToLoweCase();   or upper
-            myGames.ForEach(x => GamesListBox.Items.Add(x));
+
 
         }
     }

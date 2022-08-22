@@ -31,6 +31,8 @@ app.MapGet("/users/{id}", (Guid id) => //todo: tohle predelet asi na async a awa
 
 app.MapPost("/users", (Info info, HttpRequest request) =>
 {
+    //todo: add antispam - one request from one ip per socond will be actually porcessed
+
     Console.WriteLine($"post: guid: {info.Id}, value: {info.Value}");
     db.Save(info.Id.ToString(), info.Value);
     return Results.Ok(); //tohle by melo byt 201 - Created, ale fakt se mi to nechce implementovat

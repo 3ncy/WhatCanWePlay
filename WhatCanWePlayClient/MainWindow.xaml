@@ -63,8 +63,8 @@
                 <RowDefinition Height="0.25*"/>
             </Grid.RowDefinitions>
 
-            <TextBlock Grid.Column="1" Grid.Row="1" Grid.ColumnSpan="2" FontSize="20" HorizontalAlignment="Center" TextAlignment="Center">
-                Enter your friedns' IDs, separated by comma:
+            <TextBlock Grid.Column="0" Grid.Row="1" Grid.ColumnSpan="4" FontSize="20" HorizontalAlignment="Center" TextAlignment="Center">
+                Enter your friends' IDs, separated by a comma:
             </TextBlock>
 
             <TextBox Name="FriendGuidsTBox" Grid.Column="1" Grid.Row="2"/>
