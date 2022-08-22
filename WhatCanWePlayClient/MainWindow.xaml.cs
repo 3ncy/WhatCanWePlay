@@ -58,6 +58,8 @@ namespace WhatCanWePlayClient
 
         private List<string> CheckInstalledGames()
         {
+            List<string> installedGames = new List<string>();
+
             //to find steam games:
             //(optional) check registry key "SteamPath" under "HKEY_CURRENT_USER\SOFTWARE\Valve\Steam" for steam path
             //or just assume it's always c:/program files (x86)/steam   (might b not tho)
@@ -69,7 +71,7 @@ namespace WhatCanWePlayClient
 
             string output = "";
 
-            string steamPath = @"C:\Program Files (x86)\steam";
+            string steamPath = @"C:\Program Files (x86)\steam"; //todo: get this path from registry noted above
             string libraryfoldersvdf = File.ReadAllText(Path.Combine(steamPath, "steamapps", "libraryfolders.vdf"));
             Regex librariesRegex = new Regex(@"^\s*\u0022\d+\u0022\n.*\n\s*\u0022path\u0022\s*\u0022([^\u0022]+)\u0022", RegexOptions.Multiline);
             MatchCollection matches = librariesRegex.Matches(libraryfoldersvdf);
@@ -81,7 +83,8 @@ namespace WhatCanWePlayClient
                 gameLibraryPath = Path.Combine(gameLibraryPath, "steamapps", "common");
                 foreach (string dir in Directory.GetDirectories(gameLibraryPath))
                 {
-                    GamesListBox.Items.Add(dir.Substring(dir.LastIndexOf('\\') + 1));
+                    //GamesListBox.Items.Add(dir.Substring(dir.LastIndexOf('\\') + 1));
+                    installedGames.Add(dir.Substring(dir.LastIndexOf('\\') + 1));
                 }
 
             }
@@ -99,18 +102,27 @@ namespace WhatCanWePlayClient
             //List<string> a = json.Split('"').ToList();
             //MessageBox.Show(a[a.IndexOf("MandatoryAppFolderName") + 2]);
 
+            string epicManifestsPath = @"C:/ProgramData/Epic/EpicGamesLauncher/Data/Manifests";
+            foreach (string file in Directory.EnumerateFiles(epicManifestsPath, "*.item"))
+            {
+                string manifest = File.ReadAllText(file);
+                List<string> manifestList = manifest.Split('"').ToList();
+
+                installedGames.Add(manifestList[manifestList.IndexOf("MandatoryAppFolderName") + 2]);
+                //GamesListBox.Items.Add(manifestList[manifestList.IndexOf("MandatoryAppFolderName") + 2]);
+            }
 
 
-            //note - check the names truncated free of any spaces (and maybe special(nonalphanumeric) chars too), even the spaces in between of the words
-            //and obviously ToLoweCase();   or upper
-
-            return new List<string>();
+            return installedGames;
         }
 
         private void CheckBtn_Click(object sender, RoutedEventArgs e)
         {
             List<string> myGames = CheckInstalledGames();
 
+            //note - check the names truncated free of any spaces (and maybe special(nonalphanumeric) chars too), even the spaces in between of the words
+            //and obviously ToLoweCase();   or upper
+            myGames.ForEach(x => GamesListBox.Items.Add(x));
 
         }
     }
