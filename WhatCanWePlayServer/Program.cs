@@ -12,8 +12,10 @@ app.MapGet("/", () =>
     return Results.Content("<!DOCTYPE html><html><body>This is an API for my project, not an actual webpage (yet)<br>Check <a href=\"https://github.com/3ncy/WhatCanWePlay\">github.com/3ncy/WhatCanWePlay</a> for more info about the app.</body></html>", "text/html");
 });
 
-app.MapGet("/users/{id}", (Guid id) => //todo: tohle predelet asi na async a awaitovat volani database
+app.MapGet("/users/{id}", (Guid id, HttpRequest request) => //todo: tohle predelet asi na async a awaitovat volani database
 {
+    Console.WriteLine(request.HttpContext.Connection.RemoteIpAddress + ":" + request.HttpContext.Connection.RemotePort);
+
     string data = db.Get(id.ToString());
 
     Console.WriteLine($"data pro guid {id}: '{data}'");
@@ -35,7 +37,8 @@ app.MapPost("/users", (Info info, HttpRequest request) =>
 
     Console.WriteLine($"post: guid: {info.Id}, value: {info.Value}");
     db.Save(info.Id.ToString(), info.Value);
-    return Results.Ok(); //tohle by melo byt 201 - Created, ale fakt se mi to nechce implementovat
+    
+    return Results.Created($"/users/{info.Id}", null);
 });
 
 app.MapPost("/ping", () =>

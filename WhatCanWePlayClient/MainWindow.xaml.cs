@@ -25,11 +25,12 @@ namespace WhatCanWePlayClient
         readonly HttpClient httpClient = new HttpClient();
         Guid userGuid;
 #if DEBUG
-        string ip = "http://localhost:5181";
+        string serverIp = "http://localhost:5181";
 #else
-        string ip = "";  //todo: if hosting provider changes the ip, fetch the server's ip from my website where I'll change it manually if it changes on provider's end. That way there's no need to recompile the client
+        string ip = ""; //it will b fetched from my other server, cause my hosting hosting provider for this project might change the ip at some time
 #endif
-        DateTime lastActionTime;
+        DateTime lastCheckTime;
+        DateTime lastUploadTime;
 
         public MainWindow()
         {
@@ -52,7 +53,7 @@ namespace WhatCanWePlayClient
             GuidTBox.Text = userGuid.ToString();
 
 
-            lastActionTime = DateTime.Now;
+            lastCheckTime = DateTime.Now;
         }
 
         private void CopyBtn_Click(object sender, RoutedEventArgs e)
@@ -60,26 +61,25 @@ namespace WhatCanWePlayClient
             Clipboard.SetText(userGuid.ToString());
         }
 
-        private async Task FetchIP()
+        private async Task FetchIp()
         {
-            ip = await httpClient.GetStringAsync("https://martin.rmii.cz/files/aplikace/WhatCanWePlay/.ip.txt");
+            serverIp = await httpClient.GetStringAsync("https://martin.rmii.cz/files/aplikace/WhatCanWePlay/.ip.txt");
         }
 
         record Info(string Id, string Value);
         private async void UploadBtn_Click(object sender, RoutedEventArgs e)
         {
             //basic antispam so the api doesn't get spammed
-            if ((DateTime.Now - lastActionTime) < TimeSpan.FromMilliseconds(500))
+            if ((DateTime.Now - lastUploadTime) < TimeSpan.FromMinutes(10))
             {
-                //MessageTBlock.Text = "You can only compare the games every half a second!";
-                MessageBox.Show("You can only upload your games every half a second!", "Slow down!", MessageBoxButton.OK, MessageBoxImage.Warning);
+                ShowMessage(MessageType.UploadTimeout);
                 return;
             }
-            lastActionTime = DateTime.Now;
+            lastUploadTime = DateTime.Now;
 
-            if (ip == "")
+            if (serverIp == "")
             {
-                await FetchIP();
+                await FetchIp();
             }
 
 
@@ -91,8 +91,7 @@ namespace WhatCanWePlayClient
             var request = new HttpRequestMessage
             {
                 Method = HttpMethod.Post,
-                //RequestUri = new Uri(ip+"/users"),
-                RequestUri = new Uri(ip + "/users"),
+                RequestUri = new Uri(serverIp + "/users"),
                 Content = new StringContent(json)
                 {
                     Headers =
@@ -101,38 +100,27 @@ namespace WhatCanWePlayClient
                     }
                 }
             };
+
             try
             {
                 var response = await httpClient.SendAsync(request);
-                if (response.IsSuccessStatusCode)
+                if (response.StatusCode == System.Net.HttpStatusCode.Created)
                 {
-                    MessageBox.Show(
-                        "Games successfully uploaded!.\nShare your ID code to others now, so you can find what games you have installed in common with them.",
-                        "Success",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Information);
+                    ShowMessage(MessageType.SuccesfulUpload);
+                }
+                else if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                {
+                    ShowMessage(MessageType.UploadTimeout);
+                    return;
                 }
                 else
                 {
-                    //todo: show more user-friendly error response, prolly switch by status code, when unreachable, tell them to notify me 
-                    //nvm, it's prolly pointless, not sure what could go wrong, when the app is done. It can only fail on the server no being active, which is handled by the try catch
-                    //switch (response.StatusCode)
-                    //{
-                    //    case System.Net.HttpStatusCode.BadRequest:
-                    //        break;
-                    //    case System.Net.HttpStatusCode.NotFound:
-                    //        break;
-                    //}
-                    MessageBox.Show(response.StatusCode.ToString());
+                    ShowMessage(MessageType.UnknownError, response.StatusCode.ToString());
                 }
             }
-            catch (Exception ex)
+            catch (HttpRequestException)
             {
-                MessageBox.Show(
-                    "No Connection could be made to the server.\nCheck your internet connection and if the issue persists, please contact me.",
-                    "Connection error!",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                ShowMessage(MessageType.NoConnection);
             }
         }
 
@@ -180,7 +168,7 @@ namespace WhatCanWePlayClient
             //// this code works for parsing the name from the manifest file :D
             //string json = File.ReadAllText(@"C:\ProgramData\Epic\EpicGamesLauncher\Data\Manifests\C82F41134D16385273DC4895A5201B92.item");
             //List<string> a = json.Split('"').ToList();
-            //MessageBox.Show(a[a.IndexOf("MandatoryAppFolderName") + 2]);
+            //folderName = a[a.IndexOf("MandatoryAppFolderName") + 2];
 
             string epicManifestsPath = @"C:/ProgramData/Epic/EpicGamesLauncher/Data/Manifests";
             foreach (string file in Directory.EnumerateFiles(epicManifestsPath, "*.item"))
@@ -199,17 +187,16 @@ namespace WhatCanWePlayClient
         private async void CheckBtn_Click(object sender, RoutedEventArgs e)
         {
             //basic antispam so the api doesn't get spammed
-            if ((DateTime.Now - lastActionTime) < TimeSpan.FromMilliseconds(500))
+            if ((DateTime.Now - lastCheckTime) < TimeSpan.FromSeconds(5))
             {
-                //MessageTBlock.Text = "You can only compare the games every half a second!";
-                MessageBox.Show("You can only compare the games every half a second!", "Slow down!", MessageBoxButton.OK, MessageBoxImage.Warning);
+                ShowMessage(MessageType.CheckTimeout);
                 return;
             }
-            lastActionTime = DateTime.Now;
+            lastCheckTime = DateTime.Now;
 
-            if (ip == "")
+            if (serverIp == "")
             {
-                await FetchIP();
+                await FetchIp();
             }
 
 
@@ -226,32 +213,41 @@ namespace WhatCanWePlayClient
             {
                 if (!Guid.TryParse(friendGuid, out _))
                 {
-                    MessageBox.Show("The ID " + friendGuid + " is in an incorerect format!", "", MessageBoxButton.OK, MessageBoxImage.Error);
+                    ShowMessage(MessageType.IncorrectGuid, friendGuid);
                     return;
                 }
 
-                string response = "";
                 try
                 {
-                    response = await httpClient.GetStringAsync(ip + "/users/" + friendGuid.ToString());
+                    var httpResp = await httpClient.GetAsync(serverIp + "/users/" + friendGuid.ToString());
+
+                    if (httpResp.StatusCode == System.Net.HttpStatusCode.NotFound)
+                    {
+                        ShowMessage(MessageType.GuidNotFound);
+                        return;
+                    }
+                    else if (httpResp.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                    {
+                        ShowMessage(MessageType.CheckTimeout);
+                        return;
+                    }
+
+                    string games = httpResp.Content.ToString() ?? "";
+
+                    games = games.Replace("\"", "");
+
+                    List<string> friendsGames = games.Split('/').ToList();
+
+                    friendsGames.ForEach(x => x = rgx.Replace(x, ""));
+
+                    possibleGames = possibleGames.Intersect(friendsGames).ToList();
+
                 }
-                catch (Exception)
+                catch (HttpRequestException)
                 {
-                    MessageBox.Show(
-                        "No Connection could be made to the server.\nCheck your internet connection and if the issue persists, please contact me.",
-                        "Connection error!",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Error);
+                    ShowMessage(MessageType.NoConnection);
                     return;
                 }
-                response = response.Replace("\"", "");
-
-                List<string> friendsGames = response.Split('/').ToList();
-
-                friendsGames.ForEach(x => x = rgx.Replace(x, ""));
-                //str = rgx.Replace(str, "");
-
-                possibleGames = possibleGames.Intersect(friendsGames).ToList();
             }
 
             //show possible games
@@ -262,6 +258,78 @@ namespace WhatCanWePlayClient
             //todo: check the names truncated free of any spaces (and maybe special(nonalphanumeric) chars too), even the spaces in between of the words
             //and obviously ToLoweCase();   or upper
 
+        }
+
+
+        private enum MessageType
+        {
+            UploadTimeout,
+            SuccesfulUpload,
+            NoConnection,
+            CheckTimeout,
+            GuidNotFound,
+            UnknownError,
+            IncorrectGuid
+        }
+        void ShowMessage(MessageType messageType, params string[] values)
+        {
+            switch (messageType)
+            {
+                case MessageType.UploadTimeout:
+                    MessageBox.Show(
+                        "You can only upload your games once every 10 minutes!" +
+                        "\nPlease wait before trying again!",
+                        "Slow down!",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    break;
+                case MessageType.SuccesfulUpload:
+                    MessageBox.Show(
+                        "Games successfully uploaded!." +
+                        "\nShare your ID code to others now, so you can find what games you have installed in common with them.",
+                        "Success",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                    break;
+                case MessageType.NoConnection:
+                    MessageBox.Show(
+                        "No Connection could be made to the server." +
+                        "\nCheck your internet connection and if the issue persists, please contact me.",
+                        "Connection error!",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                    break;
+                case MessageType.CheckTimeout:
+                    MessageBox.Show(
+                        "You can only compare the games once every five seconds!" +
+                        "\nPlease wait a moment before trying again!",
+                        "Slow down!",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    break;
+                case MessageType.GuidNotFound:
+                    MessageBox.Show(
+                        "No games were found under that ID." +
+                        "\nPlease make sure the other person has uploaded their games prior to checking",
+                        "Not Found",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                    break;
+                case MessageType.UnknownError:
+                    MessageBox.Show(
+                        values[0] + "\nPlease report this error on github.",
+                        "Unknown error",
+                        MessageBoxButton.OKCancel,
+                        MessageBoxImage.Error);
+                    break;
+                case MessageType.IncorrectGuid:
+                    MessageBox.Show(
+                        "The ID " + values[0] + " is in an incorerect format!",
+                        "Formatting error",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                    break;
+            }
         }
     }
 }
