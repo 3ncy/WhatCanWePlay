@@ -24,7 +24,7 @@ namespace WhatCanWePlayClient
     {
         readonly HttpClient httpClient = new HttpClient();
         Guid userGuid;
-        readonly string ip = "http://localhost:5181";
+        string ip = "";  //todo: if hosting provider changes the ip, fetch the server's ip from my website where I'll change it manually if it changes on provider's end. That way there's no need to recompile the client
         DateTime lastActionTime;
 
         public MainWindow()
@@ -56,6 +56,11 @@ namespace WhatCanWePlayClient
             Clipboard.SetText(userGuid.ToString());
         }
 
+        private async Task FetchIP()
+        {
+            ip = await httpClient.GetStringAsync("https://martin.rmii.cz/files/aplikace/WhatCanWePlay/.ip.txt");
+        }
+
         record Info(string Id, string Value);
         private async void UploadBtn_Click(object sender, RoutedEventArgs e)
         {
@@ -68,6 +73,10 @@ namespace WhatCanWePlayClient
             }
             lastActionTime = DateTime.Now;
 
+            if (ip == "")
+            {
+                await FetchIP();
+            }
 
 
             string myGames = string.Join('/', CheckInstalledGames());
@@ -194,12 +203,18 @@ namespace WhatCanWePlayClient
             }
             lastActionTime = DateTime.Now;
 
+            if (ip == "")
+            {
+                await FetchIP();
+            }
+
+
             //remove old games from the list
             GamesListBox.Items.Clear();
 
 
             List<string> possibleGames = CheckInstalledGames();
-            Regex rgx = new Regex("[^a-zA-Z0-9 ]");//regex to remove all non alphanumeric chars
+            Regex rgx = new Regex("[^a-zA-Z0-9]");//regex to remove all non alphanumeric chars
             possibleGames.ForEach(x => x = rgx.Replace(x, ""));
 
 
