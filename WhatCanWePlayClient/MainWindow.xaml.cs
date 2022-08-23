@@ -24,7 +24,11 @@ namespace WhatCanWePlayClient
     {
         readonly HttpClient httpClient = new HttpClient();
         Guid userGuid;
+#if DEBUG
+        string ip = "http://localhost:5181";
+#else
         string ip = "";  //todo: if hosting provider changes the ip, fetch the server's ip from my website where I'll change it manually if it changes on provider's end. That way there's no need to recompile the client
+#endif
         DateTime lastActionTime;
 
         public MainWindow()
