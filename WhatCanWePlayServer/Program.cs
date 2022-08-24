@@ -71,16 +71,12 @@ app.Use(async (context, next) =>
         {
             getRatelimit.Add(hostIP, DateTime.Now);
         }
-
     }
-
 
 
 
     await next();
 });
-
-
 
 app.MapGet("/", () =>
 {
@@ -89,12 +85,18 @@ app.MapGet("/", () =>
 
 app.MapGet("/users/{*ids}", (string ids, HttpRequest request) => //todo: tohle predelet asi na async a awaitovat volani database
 {
-    Console.WriteLine(ids);
-    Console.WriteLine(ids.Split('/').Length);
+    Console.WriteLine("GET " + ids);
 
-    string response = "";
+    List<string> response = new();
 
-    foreach (string id in ids.Split('/'))
+    string[] idsSplit = ids.Split('/');
+    if (idsSplit.Length > 10)
+    {
+        return Results.StatusCode(414); //URI too long, I'll only accept 10ids max, cause more is werid and likely won't happen in normal enviroment and it could only be used to exploit the server
+    }
+
+
+    foreach (string id in idsSplit)
     {
         if (Guid.TryParse(id, out Guid guid))
         {
@@ -104,7 +106,7 @@ app.MapGet("/users/{*ids}", (string ids, HttpRequest request) => //todo: tohle p
                 return Results.NotFound(id); //no games found for this user guid
             }
 
-            response += data + "\n";
+            response.Add(data);
         }
         else
         {
@@ -112,14 +114,13 @@ app.MapGet("/users/{*ids}", (string ids, HttpRequest request) => //todo: tohle p
         }
     }
 
-    return Results.Ok(response);
-
+    return Results.Ok(string.Join("randoma$$splitter", response));
 });
 
 
 app.MapPost("/users", (Info info, HttpRequest request) =>
 {
-    Console.WriteLine($"post: guid: {info.Id}, value: {info.Value}");
+    Console.WriteLine($"POST: guid: {info.Id}, value: {info.Value}");
     db.Save(info.Id.ToString(), info.Value);
 
     return Results.Created($"/users/{info.Id}", null);

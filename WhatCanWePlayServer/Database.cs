@@ -19,6 +19,10 @@ public class Database
 
     public string Get(string key)
     {
+        //todo: this object should cache the contents of the db.txt and only refresh the cache once it's written to the file
+        //(that'd b prolly indicated by some flag raised in the Save() method)
+        //this should largely help with disk usage on the server
+
         using (StreamReader sr = new StreamReader(filename))
         {
             string s;

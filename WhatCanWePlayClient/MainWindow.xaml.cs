@@ -27,7 +27,7 @@ namespace WhatCanWePlayClient
 #if DEBUG
         string serverIp = "http://localhost:5181";
 #else
-        string ip = ""; //it will b fetched from my other server, cause my hosting hosting provider for this project might change the ip at some time
+        string serverIp = ""; //it will b fetched from my other server, cause my hosting hosting provider for this project might change the ip at some time
 #endif
         DateTime lastCheckTime;
         DateTime lastUploadTime;
@@ -214,12 +214,19 @@ namespace WhatCanWePlayClient
 
 
             List<string> possibleGames = CheckInstalledGames();
-            Regex alphanumRgx = new Regex("[^a-zA-Z0-9]");//regex to remove all non alphanumeric chars
-            //possibleGames.ForEach(x => x = alphanumRgx.Replace(x, ""));
-
+            Regex alphanumRgx = new Regex("[^a-zA-Z0-9]");//regex to remove all non alphanumeric chars //declaring it here, so I don't instantiate it each time in the foreach bellow. Maybe it would be even better to have this declare outside this method?
+        
 
             string requestUriStr = serverIp + "/users";
-            foreach (string friendGuid in FriendGuidsTBox.Text.Split(','))
+            string[] splitIDs = FriendGuidsTBox.Text.Split(',');
+            if (splitIDs.Length > 10)
+            {
+                ShowMessage(MessageType.TooManyGuids);
+                return;
+            }
+
+
+            foreach (string friendGuid in splitIDs)
             {
                 if (!Guid.TryParse(friendGuid, out _))
                 {
@@ -253,29 +260,26 @@ namespace WhatCanWePlayClient
 
                 string response = (await httpResp.Content.ReadAsStringAsync() ?? "").Replace("\"", "");
 
-                foreach (string games in response.Split('\n')) // split by individual users
+                
+                foreach (string games in response.Split("randoma$$splitter")) // split by individual users
                 {
                     List<string> friendsGames = games.Split('/').ToList();
 
-                    //idk, intersect isn't working for me somehow, so imma make it myself
+                    
+                    //List.Intersect is an easy solution, but if I want to handle the strings with removing (!!only for the check!!) all weird characters, I think I gotta do it this way
 
                     friendsGames = friendsGames.Select(g => alphanumRgx.Replace(g, "").ToLower()).ToList();
 
-                    List<string> tempGames = new List<string>(possibleGames);
-
+                    List<string> tempPossibleGames = new List<string>(possibleGames);
                     foreach (string game in possibleGames)
                     {
-                        if (!friendsGames.Contains(alphanumRgx.Replace(game, "").ToLower()))
+                        string formattedGame = alphanumRgx.Replace(game, "").ToLower();
+                        if (!friendsGames.Contains(formattedGame))
                         {
-                            tempGames.Remove(game);
+                            tempPossibleGames.Remove(game);
                         }
                     }
-
-                    possibleGames = tempGames;
-
-                    //friendsGames.ForEach(x => x = alphanumRgx.Replace(x, ""));
-                    //possibleGames = possibleGames.Intersect(friendsGames).ToList();
-
+                    possibleGames = new List<string>(tempPossibleGames);
                 }
             }
             catch (HttpRequestException)
@@ -292,11 +296,6 @@ namespace WhatCanWePlayClient
             {
                 GamesListBox.Items.Add("NO GAMES FOUND");
             }
-
-
-            //todo: check the names truncated free of any spaces (and maybe special(nonalphanumeric) chars too), even the spaces in between of the words
-            //and obviously ToLoweCase();   or upper
-
         }
 
 
@@ -308,7 +307,8 @@ namespace WhatCanWePlayClient
             CheckTimeout,
             GuidNotFound,
             UnknownError,
-            IncorrectGuid
+            IncorrectGuid,
+            TooManyGuids
         }
         void ShowMessage(MessageType messageType, params string[] values)
         {
@@ -341,7 +341,7 @@ namespace WhatCanWePlayClient
                 case MessageType.CheckTimeout:
                     MessageBox.Show(
                         "You can only compare the games once every five seconds!" +
-                        "\nPlease wait a moment before trying again!",
+                        "\nPlease wait a moment before trying again.",
                         "Slow down!",
                         MessageBoxButton.OK,
                         MessageBoxImage.Warning);
@@ -367,6 +367,13 @@ namespace WhatCanWePlayClient
                         "Formatting error",
                         MessageBoxButton.OK,
                         MessageBoxImage.Error);
+                    break;
+                case MessageType.TooManyGuids:
+                    MessageBox.Show(
+                        "You can only check 10 IDs at a time!",
+                        "Too many IDs",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
                     break;
             }
         }
