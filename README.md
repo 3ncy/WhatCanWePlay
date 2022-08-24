@@ -8,3 +8,6 @@ This is an app that helps you and your friends see what games you all have insta
 4. Then you can press the "Check!" button and you will see the list of games you and all your friends have installed.
 
 If there are any problems with the server, please contact me either here in the issues or on Discord (`Ency#9317`)
+
+
+[![forthebadge](https://forthebadge.com/images/badges/designed-in-ms-paint.svg)](https://forthebadge.com)

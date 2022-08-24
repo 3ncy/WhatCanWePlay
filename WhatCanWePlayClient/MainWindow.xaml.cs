@@ -63,7 +63,16 @@ namespace WhatCanWePlayClient
 
         private async Task FetchIp()
         {
-            serverIp = await httpClient.GetStringAsync("https://martin.rmii.cz/files/aplikace/WhatCanWePlay/.ip.txt");
+            try
+            {
+                serverIp = await httpClient.GetStringAsync("https://martin.rmii.cz/files/aplikace/WhatCanWePlay/.ip.txt");
+            }
+            catch (HttpRequestException)
+            {
+                MessageBox.Show("Couldn't get the adress of the game server.\n" +
+                    "Please try checking on github on github.com/3ncy/WhatCanWePlay for the status of the project and you can try to open an Issue.\n" +
+                    "If it is discontinued, you can host your own server using the code found on GitHub.");
+            }
         }
 
         record Info(string Id, string Value);
@@ -206,7 +215,8 @@ namespace WhatCanWePlayClient
 
             List<string> possibleGames = CheckInstalledGames();
             Regex alphanumRgx = new Regex("[^a-zA-Z0-9]");//regex to remove all non alphanumeric chars
-            possibleGames.ForEach(x => x = alphanumRgx.Replace(x, ""));
+            //possibleGames.ForEach(x => x = alphanumRgx.Replace(x, ""));
+
 
             string requestUriStr = serverIp + "/users";
             foreach (string friendGuid in FriendGuidsTBox.Text.Split(','))
@@ -240,14 +250,32 @@ namespace WhatCanWePlayClient
                     return;
                 }
 
-                
+
                 string response = (await httpResp.Content.ReadAsStringAsync() ?? "").Replace("\"", "");
 
                 foreach (string games in response.Split('\n')) // split by individual users
                 {
                     List<string> friendsGames = games.Split('/').ToList();
-                    friendsGames.ForEach(x => x = alphanumRgx.Replace(x, ""));
-                    possibleGames = possibleGames.Intersect(friendsGames).ToList();
+
+                    //idk, intersect isn't working for me somehow, so imma make it myself
+
+                    friendsGames = friendsGames.Select(g => alphanumRgx.Replace(g, "").ToLower()).ToList();
+
+                    List<string> tempGames = new List<string>(possibleGames);
+
+                    foreach (string game in possibleGames)
+                    {
+                        if (!friendsGames.Contains(alphanumRgx.Replace(game, "").ToLower()))
+                        {
+                            tempGames.Remove(game);
+                        }
+                    }
+
+                    possibleGames = tempGames;
+
+                    //friendsGames.ForEach(x => x = alphanumRgx.Replace(x, ""));
+                    //possibleGames = possibleGames.Intersect(friendsGames).ToList();
+
                 }
             }
             catch (HttpRequestException)
@@ -260,7 +288,8 @@ namespace WhatCanWePlayClient
             //show possible games
             possibleGames.ForEach(g => GamesListBox.Items.Add(g));
 
-            if (possibleGames.Count == 0) {
+            if (possibleGames.Count == 0)
+            {
                 GamesListBox.Items.Add("NO GAMES FOUND");
             }
 
