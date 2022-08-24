@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Mvc;
+using System.Xml.Linq;
 using WhatCanWePlayServer;
 
 
@@ -46,7 +48,7 @@ app.Use(async (context, next) =>
         }
 
     }
-    /*
+
     else if (context.Request.Method == "GET") // one get request each 5 seconds
     {
         //ratelimit
@@ -72,7 +74,7 @@ app.Use(async (context, next) =>
 
     }
 
-    */
+
 
 
     await next();
@@ -85,20 +87,35 @@ app.MapGet("/", () =>
     return Results.Content("<!DOCTYPE html><html><body>This is an API for my project, not an actual webpage (yet)<br>Check <a href=\"https://github.com/3ncy/WhatCanWePlay\">github.com/3ncy/WhatCanWePlay</a> for more info about the app.</body></html>", "text/html");
 });
 
-app.MapGet("/users/{id}", (Guid id, HttpRequest request) => //todo: tohle predelet asi na async a awaitovat volani database
+app.MapGet("/users/{*ids}", (string ids, HttpRequest request) => //todo: tohle predelet asi na async a awaitovat volani database
 {
-    string data = db.Get(id.ToString());
+    Console.WriteLine(ids);
+    Console.WriteLine(ids.Split('/').Length);
 
-    Console.WriteLine($"data pro guid {id}: '{data}'");
+    string response = "";
 
-    if (data == "")
+    foreach (string id in ids.Split('/'))
     {
-        Console.WriteLine("not found");
-        return Results.NotFound(); //no games found for this user guid
+        if (Guid.TryParse(id, out Guid guid))
+        {
+            string data = db.Get(id.ToString());
+            if (data == "")
+            {
+                return Results.NotFound(id); //no games found for this user guid
+            }
+
+            response += data + "\n";
+        }
+        else
+        {
+            return Results.BadRequest(id);
+        }
     }
 
-    return Results.Ok(data);
+    return Results.Ok(response);
+
 });
+
 
 app.MapPost("/users", (Info info, HttpRequest request) =>
 {
@@ -112,12 +129,6 @@ app.MapPost("/ping", () =>
 {
     return Results.Ok("Api seems to be responding.");
 });
-
-
-//app.MapGet("/t", (Guid[] ids) => {
-//    return Results.Ok(ids.Length);
-//});
-
 
 
 app.Run();

@@ -205,10 +205,10 @@ namespace WhatCanWePlayClient
 
 
             List<string> possibleGames = CheckInstalledGames();
-            Regex rgx = new Regex("[^a-zA-Z0-9]");//regex to remove all non alphanumeric chars
-            possibleGames.ForEach(x => x = rgx.Replace(x, ""));
+            Regex alphanumRgx = new Regex("[^a-zA-Z0-9]");//regex to remove all non alphanumeric chars
+            possibleGames.ForEach(x => x = alphanumRgx.Replace(x, ""));
 
-
+            string requestUriStr = serverIp + "/users";
             foreach (string friendGuid in FriendGuidsTBox.Text.Split(','))
             {
                 if (!Guid.TryParse(friendGuid, out _))
@@ -216,43 +216,53 @@ namespace WhatCanWePlayClient
                     ShowMessage(MessageType.IncorrectGuid, friendGuid);
                     return;
                 }
+                requestUriStr += "/" + friendGuid;
+            }
 
-                try
+            try
+            {
+                var httpResp = await httpClient.GetAsync(requestUriStr);
+
+                if (httpResp.StatusCode == System.Net.HttpStatusCode.NotFound)
                 {
-                    var httpResp = await httpClient.GetAsync(serverIp + "/users/" + friendGuid.ToString());
-
-                    if (httpResp.StatusCode == System.Net.HttpStatusCode.NotFound)
-                    {
-                        ShowMessage(MessageType.GuidNotFound);
-                        return;
-                    }
-                    else if (httpResp.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
-                    {
-                        ShowMessage(MessageType.CheckTimeout);
-                        return;
-                    }
-
-                    string games = httpResp.Content.ToString() ?? "";
-
-                    games = games.Replace("\"", "");
-
-                    List<string> friendsGames = games.Split('/').ToList();
-
-                    friendsGames.ForEach(x => x = rgx.Replace(x, ""));
-
-                    possibleGames = possibleGames.Intersect(friendsGames).ToList();
-
-                }
-                catch (HttpRequestException)
-                {
-                    ShowMessage(MessageType.NoConnection);
+                    ShowMessage(MessageType.GuidNotFound);
                     return;
                 }
+                else if (httpResp.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                {
+                    ShowMessage(MessageType.CheckTimeout);
+                    return;
+                }
+                else if (httpResp.StatusCode == System.Net.HttpStatusCode.BadRequest)
+                {
+                    //note: this shouldn'te really happen, cause the check is on client too, but who knows
+                    ShowMessage(MessageType.IncorrectGuid, await httpResp.Content.ReadAsStringAsync() ?? "");
+                    return;
+                }
+
+                
+                string response = (await httpResp.Content.ReadAsStringAsync() ?? "").Replace("\"", "");
+
+                foreach (string games in response.Split('\n')) // split by individual users
+                {
+                    List<string> friendsGames = games.Split('/').ToList();
+                    friendsGames.ForEach(x => x = alphanumRgx.Replace(x, ""));
+                    possibleGames = possibleGames.Intersect(friendsGames).ToList();
+                }
             }
+            catch (HttpRequestException)
+            {
+                ShowMessage(MessageType.NoConnection);
+                return;
+            }
+
 
             //show possible games
             possibleGames.ForEach(g => GamesListBox.Items.Add(g));
 
+            if (possibleGames.Count == 0) {
+                GamesListBox.Items.Add("NO GAMES FOUND");
+            }
 
 
             //todo: check the names truncated free of any spaces (and maybe special(nonalphanumeric) chars too), even the spaces in between of the words
