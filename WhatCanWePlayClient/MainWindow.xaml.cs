@@ -51,9 +51,6 @@ namespace WhatCanWePlayClient
 
             //display user their guid
             GuidTBox.Text = userGuid.ToString();
-
-
-            lastCheckTime = DateTime.Now;
         }
 
         private void CopyBtn_Click(object sender, RoutedEventArgs e)
@@ -148,22 +145,31 @@ namespace WhatCanWePlayClient
 
             string output = "";
 
-            string steamPath = @"C:\Program Files (x86)\steam"; //todo: get this path from registry noted above
-            string libraryfoldersvdf = File.ReadAllText(Path.Combine(steamPath, "steamapps", "libraryfolders.vdf"));
-            Regex librariesRegex = new Regex(@"^\s*\u0022\d+\u0022\n.*\n\s*\u0022path\u0022\s*\u0022([^\u0022]+)\u0022", RegexOptions.Multiline);
-            MatchCollection matches = librariesRegex.Matches(libraryfoldersvdf);
 
-            foreach (Match match in matches)
+            try
             {
+                string steamPath = @"C:\Program Files (x86)\steam"; //todo: get this path from registry noted above
+                string libraryfoldersvdf = File.ReadAllText(Path.Combine(steamPath, "steamapps", "libraryfolders.vdf"));
+                Regex librariesRegex = new Regex(@"^\s*\u0022\d+\u0022\n.*\n\s*\u0022path\u0022\s*\u0022([^\u0022]+)\u0022", RegexOptions.Multiline);
+                MatchCollection matches = librariesRegex.Matches(libraryfoldersvdf);
 
-                string gameLibraryPath = match.Groups[1].Value;
-                gameLibraryPath = Path.Combine(gameLibraryPath, "steamapps", "common");
-                foreach (string dir in Directory.GetDirectories(gameLibraryPath))
+                foreach (Match match in matches)
                 {
-                    //GamesListBox.Items.Add(dir.Substring(dir.LastIndexOf('\\') + 1));
-                    installedGames.Add(dir.Substring(dir.LastIndexOf('\\') + 1));
-                }
 
+                    string gameLibraryPath = match.Groups[1].Value;
+                    gameLibraryPath = Path.Combine(gameLibraryPath, "steamapps", "common");
+                    foreach (string dir in Directory.GetDirectories(gameLibraryPath))
+                    {
+                        //GamesListBox.Items.Add(dir.Substring(dir.LastIndexOf('\\') + 1));
+                        installedGames.Add(dir.Substring(dir.LastIndexOf('\\') + 1));
+                    }
+
+                }
+            }
+            catch
+            {
+                //file exceptions: file not exits, or the dir not exist or whatever
+                //this try/catch will b properly implemeted in the next version, when the installed game clients will b detected by checking corresponding registry keys
             }
 
             //to find epic games:
@@ -179,14 +185,22 @@ namespace WhatCanWePlayClient
             //List<string> a = json.Split('"').ToList();
             //folderName = a[a.IndexOf("MandatoryAppFolderName") + 2];
 
-            string epicManifestsPath = @"C:/ProgramData/Epic/EpicGamesLauncher/Data/Manifests";
-            foreach (string file in Directory.EnumerateFiles(epicManifestsPath, "*.item"))
+            try
             {
-                string manifest = File.ReadAllText(file);
-                List<string> manifestList = manifest.Split('"').ToList();
+                string epicManifestsPath = @"C:/ProgramData/Epic/EpicGamesLauncher/Data/Manifests";
+                foreach (string file in Directory.EnumerateFiles(epicManifestsPath, "*.item"))
+                {
+                    string manifest = File.ReadAllText(file);
+                    List<string> manifestList = manifest.Split('"').ToList();
 
-                installedGames.Add(manifestList[manifestList.IndexOf("MandatoryAppFolderName") + 2]);
-                //GamesListBox.Items.Add(manifestList[manifestList.IndexOf("MandatoryAppFolderName") + 2]);
+                    installedGames.Add(manifestList[manifestList.IndexOf("MandatoryAppFolderName") + 2]);
+                    //GamesListBox.Items.Add(manifestList[manifestList.IndexOf("MandatoryAppFolderName") + 2]);
+                }
+            }
+            catch
+            {
+                //file exceptions: file not exits, or the dir not exist or whatever
+                //this try/catch will b properly implemeted in the next version, when the installed game clients will b detected by checking corresponding registry keys
             }
 
 
@@ -215,7 +229,6 @@ namespace WhatCanWePlayClient
 
             List<string> possibleGames = CheckInstalledGames();
             Regex alphanumRgx = new Regex("[^a-zA-Z0-9]");//regex to remove all non alphanumeric chars //declaring it here, so I don't instantiate it each time in the foreach bellow. Maybe it would be even better to have this declare outside this method?
-        
 
             string requestUriStr = serverIp + "/users";
             string[] splitIDs = FriendGuidsTBox.Text.Split(',');
@@ -260,12 +273,12 @@ namespace WhatCanWePlayClient
 
                 string response = (await httpResp.Content.ReadAsStringAsync() ?? "").Replace("\"", "");
 
-                
+
                 foreach (string games in response.Split("randoma$$splitter")) // split by individual users
                 {
                     List<string> friendsGames = games.Split('/').ToList();
 
-                    
+
                     //List.Intersect is an easy solution, but if I want to handle the strings with removing (!!only for the check!!) all weird characters, I think I gotta do it this way
 
                     friendsGames = friendsGames.Select(g => alphanumRgx.Replace(g, "").ToLower()).ToList();
